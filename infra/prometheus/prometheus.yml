@@ -1,0 +1,19 @@
+# Person A (S) owns this file.
+# Prometheus scrape config -- pulls from our custom metrics_exporter.py,
+# which normalizes Qdrant's native /metrics endpoint plus computed per-shard stats.
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "vector_db_metrics"
+    static_configs:
+      - targets: ["metrics-exporter:8000"]
+
+  - job_name: "qdrant_native"
+    static_configs:
+      - targets:
+          - "qdrant-node-1:6333"
+          - "qdrant-node-2:6333"
+          - "qdrant-node-3:6333"
+    metrics_path: /metrics

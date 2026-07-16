@@ -1,0 +1,13 @@
+# Person A (S) owns this file.
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir requests prometheus-client pyyaml
+
+COPY infra/prometheus/metrics_exporter.py /app/infra/prometheus/metrics_exporter.py
+COPY shared/schemas.py /app/shared/schemas.py
+RUN touch /app/shared/__init__.py /app/infra/__init__.py /app/infra/prometheus/__init__.py
+
+EXPOSE 8000
+CMD ["python", "infra/prometheus/metrics_exporter.py"]

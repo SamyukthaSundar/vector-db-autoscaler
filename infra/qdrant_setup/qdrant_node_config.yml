@@ -1,0 +1,13 @@
+# Reference config mounted into each Qdrant container if custom settings are needed.
+# Person A (S) owns this file. Not required for default docker-compose setup --
+# only used if you need to override defaults (e.g. custom storage paths, log level).
+
+log_level: INFO
+
+storage:
+  # storage_path is set via the docker volume mount in docker-compose.yml
+  on_disk_payload: true
+
+service:
+  enable_tls: false
+  max_request_size_mb: 32
