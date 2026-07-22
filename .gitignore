@@ -1,0 +1,3 @@
+workload/trace_data/raw/*
+!workload/trace_data/raw/.gitkeep
+__pycache__/
