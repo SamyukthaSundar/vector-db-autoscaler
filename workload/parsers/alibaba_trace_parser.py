@@ -1,12 +1,8 @@
 """
 Person B (J) -- workload/parsers/alibaba_trace_parser.py
 
-Parses the Alibaba cluster-trace-v2017/v2018 container_usage.csv into the
+Parses the Alibaba cluster trace container_usage.csv into the
 normalized (timestamp, query_rate) format.
-
-Source: https://github.com/alibaba/clusterdata
-Recommended: use cluster-trace-v2017 (12-hour snapshot) rather than v2018
-(48GB / 280GB extracted) given typical project timelines.
 """
 
 import os
@@ -14,36 +10,45 @@ import pandas as pd
 
 from workload.parsers.base_parser import BaseTraceParser
 
-# container_usage.csv columns per Alibaba's documented schema (v2017/v2018):
-# container_id, machine_id, time_stamp, cpu_util_percent, mem_util_percent,
-# cpi, mem_gps, mpki, net_in, net_out, disk_io_percent
-ALIBABA_COLUMNS = [
-    "container_id", "machine_id", "time_stamp", "cpu_util_percent",
-    "mem_util_percent", "cpi", "mem_gps", "mpki", "net_in", "net_out",
-    "disk_io_percent",
-]
-
 
 class AlibabaTraceParser(BaseTraceParser):
     def parse(self, raw_path: str) -> pd.DataFrame:
         if not os.path.exists(raw_path):
             raise FileNotFoundError(
-                f"{raw_path} not found. Download container_usage.csv from "
-                "https://github.com/alibaba/clusterdata (cluster-trace-v2017 "
-                "recommended for project timelines) and place it here."
+                f"{raw_path} not found. Place container_usage.csv in {raw_path}"
             )
 
-        raw = pd.read_csv(raw_path, header=None, names=ALIBABA_COLUMNS)
+        # Read only columns 0 (timestamp) and 2 (cpu_util_percent) by integer index
+        raw = pd.read_csv(
+            raw_path,
+            header=None,
+            usecols=[0, 2],
+            names=["time_stamp", "cpu_util_percent"],
+            low_memory=False
+        )
 
-        # Aggregate CPU utilization across containers into 1-minute windows
-        # as a proxy for query rate/load (matches the approach used by prior
-        # work applying this trace to autoscaling research).
-        raw["time_bucket"] = (raw["time_stamp"] // 60) * 60
+        # Ensure numeric types
+        raw["time_stamp"] = pd.to_numeric(raw["time_stamp"], errors="coerce")
+        raw["cpu_util_percent"] = pd.to_numeric(raw["cpu_util_percent"], errors="coerce")
+
+        # Drop NaNs and invalid negative setup timestamps
+        raw = raw.dropna(subset=["time_stamp", "cpu_util_percent"])
+        raw = raw[raw["time_stamp"] >= 0]
+
+        # Normalize timestamps to start from 0 seconds upwards
+        min_ts = raw["time_stamp"].min()
+        raw["normalized_sec"] = raw["time_stamp"] - min_ts
+
+        # Aggregate CPU utilization across containers into 1-minute (60s) windows
+        raw["time_bucket"] = (raw["normalized_sec"] // 60).astype(int) * 60
+
         grouped = raw.groupby("time_bucket")["cpu_util_percent"].mean().reset_index()
+
         df = pd.DataFrame({
             "timestamp": grouped["time_bucket"],
             "query_rate": grouped["cpu_util_percent"],
         })
+
         return self.validate(df)
 
 
@@ -53,4 +58,4 @@ if __name__ == "__main__":
     out_path = "workload/trace_data/alibaba_parsed.csv"
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     df.to_csv(out_path, index=False)
-    print(f"Wrote {len(df)} rows to {out_path}")
+    print(f"Successfully wrote {len(df)} rows to {out_path}")
