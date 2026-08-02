@@ -1,0 +1,39 @@
+# Shared config used by infra/, policy/, and workload/.
+# Person A (S) owns node topology; Person D owns thresholds.
+
+collection_name: "vectors_main"
+vector_size: 128
+distance_metric: "Cosine"
+
+nodes:
+  - name: qdrant-node-1
+    host: localhost
+    port: 6333
+  - name: qdrant-node-2
+    host: localhost
+    port: 6343
+  - name: qdrant-node-3
+    host: localhost
+    port: 6353
+
+shards:
+  count: 6
+  replication_factor: 1
+
+# Reactive baseline thresholds (Person D)
+reactive_policy:
+  scale_up_load_threshold: 0.75    # fraction of shard capacity
+  scale_down_load_threshold: 0.25
+  cooldown_seconds: 60
+
+# Predictive policy thresholds (Person D)
+predictive_policy:
+  forecast_horizon_seconds: 300
+  confidence_level: 0.90
+  scale_up_upper_bound_threshold: 0.70
+  rebalance_load_delta_threshold: 0.35   # trigger migration if hot-cold gap exceeds this
+
+# SLA definition used across evaluation (Person D)
+sla:
+  max_p95_latency_ms: 150
+  max_p99_latency_ms: 300
