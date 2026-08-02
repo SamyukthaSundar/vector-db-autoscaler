@@ -7,6 +7,7 @@ bounds. Run this against workload/trace_data/*.csv scenario files -- doesn't
 need the live cluster.
 """
 
+import os
 import numpy as np
 import pandas as pd
 
@@ -55,22 +56,69 @@ def evaluate_quantile(series: pd.Series, train_frac: float = 0.7) -> dict:
     return {"mae": float(np.mean(errors)), "pinball_loss_90": float(np.mean(pinballs))}
 
 
+# Every trace file worth evaluating against: synthetic scenario files (controlled,
+# isolated patterns) plus real-world production traces (Azure, Alibaba).
+TRACE_FILES = {
+    "steady_state (synthetic)": "workload/trace_data/scenario_steady_state.csv",
+    "diurnal (synthetic)": "workload/trace_data/scenario_diurnal.csv",
+    "bursty (synthetic)": "workload/trace_data/scenario_bursty.csv",
+    "azure (real-world)": "workload/trace_data/azure_parsed.csv",
+    "alibaba (real-world)": "workload/trace_data/alibaba_parsed.csv",
+}
+
+
+def load_series(path: str) -> pd.Series:
+    df = pd.read_csv(path)
+    return df["query_rate"]
+
+
+def run_all():
+    results = []
+
+    for label, path in TRACE_FILES.items():
+        if not os.path.exists(path):
+            print(f"[skip] {label}: {path} not found")
+            continue
+
+        series = load_series(path)
+        if len(series) < 150:  # raw rows -- needs to comfortably exceed lookback_long (120)
+            print(f"[skip] {label}: only {len(series)} rows, too few for quantile model's feature window")
+            continue
+
+        ewma_result = evaluate_ewma(series)
+
+        try:
+            quantile_result = evaluate_quantile(series)
+        except ValueError as e:
+            print(f"[skip quantile] {label}: {e}")
+            continue
+
+        results.append({
+            "trace": label,
+            "n_rows": len(series),
+            "ewma_mae": ewma_result["mae"],
+            "ewma_pinball_90": ewma_result["pinball_loss_90"],
+            "quantile_mae": quantile_result["mae"],
+            "quantile_pinball_90": quantile_result["pinball_loss_90"],
+        })
+
+    if not results:
+        print("No trace files found -- check workload/trace_data/ has been populated.")
+        return
+
+    df_results = pd.DataFrame(results)
+    print("\n=== Forecast Accuracy Comparison ===\n")
+    print(df_results.to_string(index=False))
+
+    out_path = "results/forecast_accuracy_comparison.csv"
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    df_results.to_csv(out_path, index=False)
+    print(f"\nSaved comparison table to {out_path}")
+
+    
+
+
+
+
 if __name__ == "__main__":
-    import os
-
-    # Try to load J's real trace-derived scenario data first.
-    # Falls back to synthetic data only if it's not available yet,
-    # so this script still works standalone even before J's data lands.
-    trace_path = "workload/trace_data/scenario_diurnal.csv"
-
-    if os.path.exists(trace_path):
-        print(f"Using real trace data from {trace_path}")
-        df = pd.read_csv(trace_path)
-        series = df["query_rate"]
-    else:
-        print(f"{trace_path} not found -- using synthetic fallback data")
-        t = np.arange(0, 3000)
-        series = pd.Series(50 + 20 * np.sin(2 * np.pi * t / 300) + np.random.normal(0, 3, len(t)))
-
-    print("EWMA baseline:", evaluate_ewma(series))
-    print("Quantile model:", evaluate_quantile(series))
+    run_all()
