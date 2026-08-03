@@ -2,3 +2,6 @@ workload/trace_data/raw/*
 !workload/trace_data/raw/.gitkeep
 __pycache__/
 venv/
+results/*.jsonl
+results/charts/*.png
+.venv/

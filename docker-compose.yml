@@ -1,0 +1,72 @@
+version: "3.8"
+
+# Person A (S) owns this file.
+# Brings up a small Qdrant "cluster" (simulated via multiple single-node containers,
+# since true distributed Qdrant clustering needs P2P config beyond project scope)
+# plus Prometheus for metrics scraping.
+
+services:
+  qdrant-node-1:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-node-1
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data_1:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__ENABLE_TLS=false
+      - QDRANT__TELEMETRY_DISABLED=true
+
+  qdrant-node-2:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-node-2
+    ports:
+      - "6343:6333"
+      - "6344:6334"
+    volumes:
+      - qdrant_data_2:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__ENABLE_TLS=false
+      - QDRANT__TELEMETRY_DISABLED=true
+
+  qdrant-node-3:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-node-3
+    ports:
+      - "6353:6333"
+      - "6354:6334"
+    volumes:
+      - qdrant_data_3:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__ENABLE_TLS=false
+      - QDRANT__TELEMETRY_DISABLED=true
+
+  metrics-exporter:
+    build:
+      context: ./infra/prometheus
+      dockerfile: Dockerfile.exporter
+    container_name: metrics-exporter
+    ports:
+      - "8000:8000"
+    depends_on:
+      - qdrant-node-1
+      - qdrant-node-2
+      - qdrant-node-3
+    environment:
+      - QDRANT_NODES=qdrant-node-1:6333,qdrant-node-2:6333,qdrant-node-3:6333
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - metrics-exporter
+
+volumes:
+  qdrant_data_1:
+  qdrant_data_2:
+  qdrant_data_3:
