@@ -25,7 +25,8 @@ def load_scenario(name: str) -> pd.DataFrame:
 
 
 def replay(df: pd.DataFrame, client: QdrantClient, collection_name: str,
-           vector_size: int = 128, speed_multiplier: float = 60.0):
+           vector_size: int = 128, speed_multiplier: float = 60.0,
+           node_name: str = None):
     """Replay the trace. `speed_multiplier` compresses trace time into wall
     time (default 60x -- an hour of trace plays out in a minute), since
     running traces at real-time speed isn't practical for iteration.
@@ -60,8 +61,8 @@ def replay(df: pd.DataFrame, client: QdrantClient, collection_name: str,
             p99 = float(np.percentile(latencies[-500:], 99))
             point = MetricPoint(
                 timestamp=now(),
-                shard_id=f"{collection_name}-aggregate",
-                node_name="replay_engine",
+                shard_id=f"{node_name}-shard-agg" if node_name else f"{collection_name}-aggregate",
+                node_name=node_name or "replay_engine",
                 query_rate=rate,
                 p95_latency_ms=p95,
                 p99_latency_ms=p99,
@@ -80,8 +81,12 @@ if __name__ == "__main__":
     ap.add_argument("--port", type=int, default=6333)
     ap.add_argument("--collection", default="vectors_main")
     ap.add_argument("--speed", type=float, default=60.0)
+    ap.add_argument("--node-name", default=None,
+                     help="e.g. qdrant-node-1 -- tags metrics as {node-name}-shard-agg "
+                          "so policy/ picks them up correctly")
     args = ap.parse_args()
 
     df = load_scenario(args.scenario)
     client = QdrantClient(host=args.host, port=args.port)
-    replay(df, client, args.collection, speed_multiplier=args.speed)
+    replay(df, client, args.collection, speed_multiplier=args.speed,
+           node_name=args.node_name)
