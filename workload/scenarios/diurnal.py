@@ -5,6 +5,12 @@ Generates a diurnal (day/night) evaluation scenario: smooth sinusoidal
 pattern mimicking typical daily traffic cycles, the classic case predictive
 forecasting is supposed to shine at, since the pattern is regular enough to
 forecast confidently ahead of time.
+
+Default duration is 7 days (not 1) so forecasting models trained on a
+chronological train/test split actually see the full range of the daily
+cycle (peaks and troughs) during training, rather than being evaluated on
+values outside their trained range -- tree-based models in particular can't
+extrapolate beyond what they've seen.
 """
 
 import numpy as np
@@ -12,7 +18,7 @@ import pandas as pd
 import os
 
 
-def generate(duration_seconds: int = 24 * 3600, base_rate: float = 50.0,
+def generate(duration_seconds: int = 7 * 24 * 3600, base_rate: float = 50.0,
              amplitude: float = 35.0, noise_std: float = 4.0) -> pd.DataFrame:
     t = np.arange(0, duration_seconds, 60)
     diurnal = base_rate + amplitude * np.sin(2 * np.pi * t / (24 * 3600) - np.pi / 2)
