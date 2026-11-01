@@ -39,6 +39,7 @@ def create_collection(client: QdrantClient, config: dict):
 
 if __name__ == "__main__":
     cfg = load_config()
-    primary_node = cfg["nodes"][0]
-    client = QdrantClient(host=primary_node["host"], port=primary_node["port"])
-    create_collection(client, cfg)
+    for node in cfg["nodes"]:
+        client = QdrantClient(host=node["host"], port=node["port"])
+        print(f"Creating collection on {node['name']} ({node['host']}:{node['port']})...")
+        create_collection(client, cfg)
